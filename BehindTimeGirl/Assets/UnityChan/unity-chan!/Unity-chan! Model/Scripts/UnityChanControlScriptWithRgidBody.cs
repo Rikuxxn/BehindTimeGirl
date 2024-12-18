@@ -24,7 +24,7 @@ namespace UnityChan
 
 		// 以下キャラクターコントローラ用パラメタ
 		// 前進速度
-		public float forwardSpeed = 7.0f;
+		public float forwardSpeed = 14.0f;
 		// 後退速度
 		public float backwardSpeed = 2.0f;
 		// 旋回速度
@@ -43,7 +43,8 @@ namespace UnityChan
 		private AnimatorStateInfo currentBaseState;			// base layerで使われる、アニメーターの現在の状態の参照
 
 		private GameObject cameraObject;	// メインカメラへの参照
-		
+		private bool isStopped = false; // 停止状態の判定
+
 		// アニメーター各ステートへの参照
 		static int idleState = Animator.StringToHash ("Base Layer.Idle");
 		static int locoState = Animator.StringToHash ("Base Layer.Locomotion");
@@ -69,10 +70,19 @@ namespace UnityChan
 		// 以下、メイン処理.リジッドボディと絡めるので、FixedUpdate内で処理を行う.
 		void FixedUpdate ()
 		{
-			float h = 0.0f;										// 左右移動を無効にする
-			float v = 1.0f;										// 常に前進させる
-			anim.SetFloat ("Speed", v);							// Animator側で設定している"Speed"パラメタにvを渡す
-			anim.SetFloat ("Direction", h); 						// Animator側で設定している"Direction"パラメタにhを渡す
+			// Sキーで停止・再開の切り替え
+			if (Input.GetKey(KeyCode.S))
+			{
+				isStopped = true;
+			}
+			else
+			{
+				isStopped = false;
+			}
+			float h = 0.0f;                                     // 左右移動を無効にする
+			float v = isStopped ? 0.0f : 1.0f;                  // 停止中なら0、そうでなければ1.0
+			anim.SetFloat("Speed", v);							// アニメーターのSpeedを更新	
+			anim.SetFloat ("Direction", h); 					// Animator側で設定している"Direction"パラメタにhを渡す
 			anim.speed = animSpeed;								// Animatorのモーション再生速度に animSpeedを設定する
 			currentBaseState = anim.GetCurrentAnimatorStateInfo (0);	// 参照用のステート変数にBase Layer (0)の現在のステートを設定する
 			rb.useGravity = true;//ジャンプ中に重力を切るので、それ以外は重力の影響を受けるようにする
@@ -84,12 +94,15 @@ namespace UnityChan
 											 // キャラクターのローカル空間での方向に変換
 			velocity = transform.TransformDirection (velocity);
 			//以下のvの閾値は、Mecanim側のトランジションと一緒に調整する
-			if (v > 0.1) {
-				velocity *= forwardSpeed;		// 移動速度を掛ける
-			} else if (v < -0.1) {
-				velocity *= backwardSpeed;	// 移動速度を掛ける
+			if (v > 0.1f)
+			{
+				velocity *= forwardSpeed;
 			}
-		
+			else if (v < -0.1f)
+			{
+				velocity *= backwardSpeed;
+			}
+
 			if (Input.GetButtonDown ("Jump")) {	// スペースキーを入力したら
 
 				//アニメーションのステートがLocomotionの最中のみジャンプできる
@@ -101,16 +114,21 @@ namespace UnityChan
 					}
 				}
 			}
-		
 
-			// 上下のキー入力でキャラクターを移動させる
-			transform.localPosition += velocity * Time.fixedDeltaTime;
-	
+			// 速度ベクトルを設定
+			rb.velocity = new Vector3(
+				0,                                  // x方向の速度
+				rb.velocity.y,                      // y方向の速度（重力の影響を保持）
+				velocity.z                          // z方向の速度（前後移動）
+			);
+            // 上下のキー入力でキャラクターを移動させる
+            transform.localPosition += velocity * Time.fixedDeltaTime;
 
-			// 以下、Animatorの各ステート中での処理
-			// Locomotion中
-			// 現在のベースレイヤーがlocoStateの時
-			if (currentBaseState.nameHash == locoState) {
+
+            // 以下、Animatorの各ステート中での処理
+            // Locomotion中
+            // 現在のベースレイヤーがlocoStateの時
+            if (currentBaseState.nameHash == locoState) {
 				//カーブでコライダ調整をしている時は、念のためにリセットする
 				if (useCurves) {
 					resetCollider ();
